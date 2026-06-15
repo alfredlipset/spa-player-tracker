@@ -1,0 +1,444 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SPA Soccer Player Tracker</title>
+  <style>
+    :root {
+      --bg: #f5f1e8;
+      --paper: #fffdf8;
+      --ink: #17211c;
+      --muted: #5b685f;
+      --line: #d9d1c2;
+      --accent: #154734;
+      --accent-2: #b9975b;
+      --good: #1e7f4f;
+      --shadow: 0 14px 36px rgba(18, 30, 22, 0.08);
+      --radius: 18px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font: 16px/1.45 Georgia, "Times New Roman", serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top left, rgba(185, 151, 91, 0.22), transparent 28%),
+        linear-gradient(180deg, #efe7d8 0%, var(--bg) 30%, #f7f4ed 100%);
+    }
+
+    a {
+      color: inherit;
+    }
+
+    .shell {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 28px 16px 40px;
+    }
+
+    .hero {
+      background: linear-gradient(135deg, rgba(21, 71, 52, 0.98), rgba(34, 94, 69, 0.94));
+      color: #f7f4ed;
+      border-radius: 28px;
+      padding: 28px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      position: relative;
+    }
+
+    .hero::after {
+      content: "";
+      position: absolute;
+      inset: auto -10% -60px auto;
+      width: 280px;
+      height: 280px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(185, 151, 91, 0.55), rgba(185, 151, 91, 0));
+      pointer-events: none;
+    }
+
+    .eyebrow {
+      margin: 0 0 8px;
+      font: 700 0.78rem/1.1 Arial, sans-serif;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: rgba(247, 244, 237, 0.75);
+    }
+
+    h1 {
+      margin: 0;
+      max-width: 760px;
+      font-size: clamp(2rem, 3.4vw, 3.7rem);
+      line-height: 0.98;
+      letter-spacing: -0.03em;
+    }
+
+    .hero p {
+      margin: 14px 0 0;
+      max-width: 700px;
+      color: rgba(247, 244, 237, 0.88);
+      font-size: 1rem;
+    }
+
+    .panel {
+      margin-top: 18px;
+      background: var(--paper);
+      border: 1px solid rgba(23, 33, 28, 0.08);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 18px;
+    }
+
+    .controls {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+      align-items: end;
+    }
+
+    .field label,
+    .stat-label {
+      display: block;
+      margin-bottom: 6px;
+      font: 700 0.78rem/1.1 Arial, sans-serif;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .field input,
+    .field select,
+    .field textarea {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 11px 12px;
+      background: #fff;
+      color: var(--ink);
+      font: inherit;
+    }
+
+    .field textarea {
+      min-height: 84px;
+      resize: vertical;
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 16px;
+    }
+
+    button {
+      appearance: none;
+      border: 0;
+      border-radius: 999px;
+      padding: 11px 16px;
+      background: var(--accent);
+      color: #f7f4ed;
+      font: 700 0.92rem/1 Arial, sans-serif;
+      cursor: pointer;
+    }
+
+    button.secondary {
+      background: #e9e1d1;
+      color: var(--ink);
+    }
+
+    button.ghost {
+      background: transparent;
+      color: var(--accent);
+      border: 1px solid rgba(21, 71, 52, 0.25);
+    }
+
+    .week-overview {
+      display: grid;
+      grid-template-columns: 1.6fr 1fr;
+      gap: 16px;
+      margin-top: 18px;
+    }
+
+    .summary-card,
+    .stats-card {
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 16px;
+      background: linear-gradient(180deg, #fffdf8, #f5efe4);
+    }
+
+    .summary-card h2,
+    .stats-card h2 {
+      margin: 0 0 10px;
+      font-size: 1.25rem;
+    }
+
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+
+    .progress-bar {
+      height: 12px;
+      border-radius: 999px;
+      background: #e8e1d4;
+      overflow: hidden;
+      margin-top: 10px;
+    }
+
+    .progress-fill {
+      height: 100%;
+      width: 0;
+      background: linear-gradient(90deg, var(--accent-2), var(--good));
+      border-radius: 999px;
+      transition: width 180ms ease;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 12px;
+    }
+
+    .stat {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 12px;
+      background: rgba(255, 255, 255, 0.75);
+    }
+
+    .stat-value {
+      font: 700 clamp(1.4rem, 2.6vw, 2rem)/1 Arial, sans-serif;
+      color: var(--accent);
+    }
+
+    .sessions {
+      display: grid;
+      gap: 16px;
+      margin-top: 18px;
+    }
+
+    .session-card {
+      background: var(--paper);
+      border: 1px solid rgba(23, 33, 28, 0.08);
+      border-radius: 20px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .session-head {
+      padding: 18px 18px 14px;
+      border-bottom: 1px solid #eee4d6;
+      background: linear-gradient(180deg, rgba(21, 71, 52, 0.04), rgba(185, 151, 91, 0.06));
+    }
+
+    .session-kicker {
+      font: 700 0.76rem/1 Arial, sans-serif;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+
+    .session-head h3 {
+      margin: 0;
+      font-size: 1.2rem;
+    }
+
+    .session-head p {
+      margin: 8px 0 0;
+      color: var(--muted);
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 760px;
+    }
+
+    th,
+    td {
+      padding: 12px 14px;
+      border-bottom: 1px solid #eee4d6;
+      vertical-align: top;
+      text-align: left;
+    }
+
+    th {
+      font: 700 0.76rem/1 Arial, sans-serif;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted);
+      background: rgba(245, 239, 228, 0.7);
+    }
+
+    td.title-cell strong {
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    td.title-cell span,
+    .subtle {
+      color: var(--muted);
+      font-size: 0.94rem;
+    }
+
+    .done-cell {
+      width: 68px;
+      text-align: center;
+    }
+
+    .done-cell input {
+      width: 22px;
+      height: 22px;
+      accent-color: var(--good);
+    }
+
+    .small-input,
+    .small-textarea {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 10px 11px;
+      background: #fff;
+      font: inherit;
+      color: var(--ink);
+    }
+
+    .small-textarea {
+      min-height: 64px;
+      resize: vertical;
+    }
+
+    .footer-note {
+      margin-top: 18px;
+      color: var(--muted);
+      font-size: 0.93rem;
+    }
+
+    .toast {
+      position: fixed;
+      right: 14px;
+      bottom: 14px;
+      padding: 10px 14px;
+      border-radius: 999px;
+      background: rgba(23, 33, 28, 0.92);
+      color: #fff;
+      font: 700 0.82rem/1 Arial, sans-serif;
+      opacity: 0;
+      transform: translateY(8px);
+      transition: opacity 150ms ease, transform 150ms ease;
+      pointer-events: none;
+    }
+
+    .toast.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    @media (max-width: 900px) {
+      .controls,
+      .week-overview,
+      .stats-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .hero,
+      .panel {
+        padding: 16px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <section class="hero">
+      <p class="eyebrow">SPA Boys Soccer 2026</p>
+      <h1>Player Workout Tracker</h1>
+      <p>
+        Players can enter their name, track every session, save progress on their phone,
+        and export a clean CSV to text or email when needed.
+      </p>
+    </section>
+
+    <section class="panel">
+      <div class="controls">
+        <div class="field">
+          <label for="playerName">Player Name</label>
+          <input id="playerName" type="text" placeholder="Enter full name" />
+        </div>
+        <div class="field">
+          <label for="weekSelect">Training Week</label>
+          <select id="weekSelect"></select>
+        </div>
+        <div class="field">
+          <label for="playerGoal">Weekly Goal</label>
+          <input id="playerGoal" type="text" placeholder="Example: hit all runs, stay crisp" />
+        </div>
+        <div class="field">
+          <label for="playerNotes">Coach / Player Notes</label>
+          <input id="playerNotes" type="text" placeholder="Optional notes for this week" />
+        </div>
+      </div>
+
+      <div class="actions">
+        <button id="downloadCsv">Download CSV</button>
+        <button id="copySummary" class="secondary">Copy Weekly Summary</button>
+        <button id="resetWeek" class="ghost">Reset This Week</button>
+      </div>
+
+      <div class="week-overview">
+        <div class="summary-card">
+          <h2 id="weekTitle"></h2>
+          <div class="meta" id="weekMeta"></div>
+          <p id="weekFocus" class="subtle" style="margin-top: 10px;"></p>
+          <div class="progress-bar">
+            <div id="progressFill" class="progress-fill"></div>
+          </div>
+          <p id="progressText" class="subtle" style="margin-top: 8px;"></p>
+        </div>
+        <div class="stats-card">
+          <h2>Week Stats</h2>
+          <div class="stats-grid">
+            <div class="stat">
+              <div class="stat-label">Completed</div>
+              <div id="completedCount" class="stat-value">0</div>
+            </div>
+            <div class="stat">
+              <div class="stat-label">Remaining</div>
+              <div id="remainingCount" class="stat-value">0</div>
+            </div>
+            <div class="stat">
+              <div class="stat-label">Sessions</div>
+              <div id="sessionCount" class="stat-value">0</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="sessions" class="sessions"></section>
+
+    <p class="footer-note">
+      This tracker saves on the player’s device automatically. Export CSV or copy the weekly
+      summary to share results with coaches.
+    </p>
+  </main>
+
+  <div id="toast" class="toast">Saved</div>
+  <script src="./app.js"></script>
+</body>
+</html>
