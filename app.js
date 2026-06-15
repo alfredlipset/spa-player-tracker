@@ -92,6 +92,10 @@ const weeks = [
 ];
 
 const storageKey = "spa-player-tracker-v1";
+const fallbackFormUrl = "https://docs.google.com/forms/d/e/1FAIpQLSe4cWpH9Htqx0InTRLvjx8AGlShH8YoPYQ0O0TvAZK4nh_Qfw/viewform";
+const formResponseUrl = "https://docs.google.com/forms/d/e/1FAIpQLSe4cWpH9Htqx0InTRLvjx8AGlShH8YoPYQ0O0TvAZK4nh_Qfw/formResponse";
+const playerNameEntry = "entry.266055319";
+const submissionJsonEntry = "entry.781875227";
 const playerNameEl = document.getElementById("playerName");
 const weekSelectEl = document.getElementById("weekSelect");
 const playerGoalEl = document.getElementById("playerGoal");
@@ -105,6 +109,7 @@ const completedCountEl = document.getElementById("completedCount");
 const remainingCountEl = document.getElementById("remainingCount");
 const sessionCountEl = document.getElementById("sessionCount");
 const sessionsEl = document.getElementById("sessions");
+const submitStatusEl = document.getElementById("submitStatus");
 const toastEl = document.getElementById("toast");
 
 const state = loadState();
@@ -113,10 +118,19 @@ function loadState() {
   try {
     const raw = localStorage.getItem(storageKey);
     if (raw) {
-      return JSON.parse(raw);
+      const parsed = JSON.parse(raw);
+      return {
+        playerName: "",
+        playerGoal: "",
+        playerNotes: "",
+        selectedWeek: 1,
+        entries: {},
+        submissions: {},
+        ...parsed
+      };
     }
   } catch (_) {}
-  return { playerName: "", playerGoal: "", playerNotes: "", selectedWeek: 1, entries: {} };
+  return { playerName: "", playerGoal: "", playerNotes: "", selectedWeek: 1, entries: {}, submissions: {} };
 }
 
 function saveState(showToast = true) {
@@ -385,6 +399,10 @@ function downloadCsv() {
 
 function weeklySummary() {
   const week = weeks.find((item) => item.week === Number(state.selectedWeek)) || weeks[0];
+  return weeklySummaryForWeek(week);
+}
+
+function weeklySummaryForWeek(week) {
   const sessions = getSessions(week);
   const completedItems = [];
 
@@ -406,6 +424,89 @@ function weeklySummary() {
     ``,
     completedItems.length ? completedItems.join("\n") : "- No entries yet."
   ].join("\n");
+}
+
+function buildWeekSubmission(week) {
+  const sessions = getSessions(week);
+  const rows = sessions.flatMap((session) =>
+    session.rows.map((row) => {
+      const entry = getEntry(week.week, session.id, row.name);
+      return {
+        sessionId: session.id,
+        sessionTitle: session.title,
+        sessionKicker: session.kicker,
+        workout: row.name,
+        prescribed: row.prescribed,
+        coachNote: row.coachNote || "",
+        done: entry.done,
+        result: entry.result || "",
+        notes: entry.notes || ""
+      };
+    })
+  );
+  const completed = rows.filter((row) => row.done).length;
+  return {
+    submittedAt: new Date().toISOString(),
+    source: "spa-player-tracker",
+    version: 2,
+    playerName: (state.playerName || "").trim(),
+    playerGoal: state.playerGoal || "",
+    playerNotes: state.playerNotes || "",
+    week: week.week,
+    dates: week.dates,
+    phase: week.phase,
+    focus: week.focus,
+    completed,
+    total: rows.length,
+    progressPercent: rows.length ? Math.round((completed / rows.length) * 100) : 0,
+    summary: weeklySummaryForWeek(week),
+    rows
+  };
+}
+
+function updateSubmitStatus() {
+  const submission = state.submissions?.[String(state.selectedWeek)];
+  if (submission?.submittedAt) {
+    const submittedAt = new Date(submission.submittedAt);
+    const label = Number.isNaN(submittedAt.getTime()) ? submission.submittedAt : submittedAt.toLocaleString();
+    submitStatusEl.textContent = `Last submitted Week ${state.selectedWeek}: ${label}`;
+    return;
+  }
+  submitStatusEl.textContent = "Submit the selected week to the shared coach sheet after you update your results.";
+}
+
+async function submitWeek() {
+  const week = weeks.find((item) => item.week === Number(state.selectedWeek)) || weeks[0];
+  const playerName = (state.playerName || "").trim();
+  if (!playerName) {
+    flashToast("Enter player name first");
+    playerNameEl.focus();
+    return;
+  }
+
+  const payload = buildWeekSubmission(week);
+  const body = new URLSearchParams();
+  body.set(playerNameEntry, playerName);
+  body.set(submissionJsonEntry, JSON.stringify(payload));
+
+  try {
+    submitStatusEl.textContent = `Submitting Week ${week.week}...`;
+    await fetch(formResponseUrl, {
+      method: "POST",
+      mode: "no-cors",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8"
+      },
+      body: body.toString()
+    });
+    state.submissions[String(week.week)] = { submittedAt: payload.submittedAt };
+    saveState(false);
+    updateSubmitStatus();
+    flashToast("Week submitted");
+  } catch (_) {
+    submitStatusEl.textContent = "Submit failed. Use the backup form button.";
+    flashToast("Submit failed");
+  }
 }
 
 async function copySummary() {
@@ -443,8 +544,12 @@ function attachEvents() {
     saveState(false);
     render();
   });
+  document.getElementById("submitWeek").addEventListener("click", submitWeek);
   document.getElementById("downloadCsv").addEventListener("click", downloadCsv);
   document.getElementById("copySummary").addEventListener("click", copySummary);
+  document.getElementById("openFallbackForm").addEventListener("click", () => {
+    window.open(fallbackFormUrl, "_blank", "noopener,noreferrer");
+  });
   document.getElementById("resetWeek").addEventListener("click", resetWeek);
   sessionsEl.addEventListener("input", (event) => {
     const target = event.target;
@@ -474,6 +579,7 @@ function render() {
   renderHeader(week);
   renderSessions();
   updateStats();
+  updateSubmitStatus();
 }
 
 render();

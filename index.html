@@ -370,7 +370,7 @@
       <h1>Player Workout Tracker</h1>
       <p>
         Players can enter their name, track every session, save progress on their phone,
-        and export a clean CSV to text or email when needed.
+        and submit each week directly to the coach sheet from this same page.
       </p>
     </section>
 
@@ -395,10 +395,15 @@
       </div>
 
       <div class="actions">
+        <button id="submitWeek">Submit Week to Coach Sheet</button>
         <button id="downloadCsv">Download CSV</button>
         <button id="copySummary" class="secondary">Copy Weekly Summary</button>
+        <button id="openFallbackForm" class="secondary">Open Backup Form</button>
         <button id="resetWeek" class="ghost">Reset This Week</button>
       </div>
+      <p id="submitStatus" class="footer-note" style="margin-top: 12px;">
+        Submit the selected week to the shared coach sheet after you update your results.
+      </p>
 
       <div class="week-overview">
         <div class="summary-card">
@@ -433,8 +438,8 @@
     <section id="sessions" class="sessions"></section>
 
     <p class="footer-note">
-      This tracker saves on the player’s device automatically. Export CSV or copy the weekly
-      summary to share results with coaches.
+      This tracker saves on the player’s device automatically. The main submit button sends the
+      selected week to the shared coach sheet. If that ever fails, use the backup form.
     </p>
   </main>
 
