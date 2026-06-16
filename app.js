@@ -98,6 +98,7 @@ const playerNameEntry = "entry.266055319";
 const submissionJsonEntry = "entry.781875227";
 const playerNameEl = document.getElementById("playerName");
 const weekSelectEl = document.getElementById("weekSelect");
+const playerPositionEl = document.getElementById("playerPosition");
 const playerGoalEl = document.getElementById("playerGoal");
 const playerNotesEl = document.getElementById("playerNotes");
 const weekTitleEl = document.getElementById("weekTitle");
@@ -121,6 +122,7 @@ function loadState() {
       const parsed = JSON.parse(raw);
       return {
         playerName: "",
+        playerPosition: "field",
         playerGoal: "",
         playerNotes: "",
         selectedWeek: 1,
@@ -130,7 +132,7 @@ function loadState() {
       };
     }
   } catch (_) {}
-  return { playerName: "", playerGoal: "", playerNotes: "", selectedWeek: 1, entries: {}, submissions: {} };
+  return { playerName: "", playerPosition: "field", playerGoal: "", playerNotes: "", selectedWeek: 1, entries: {}, submissions: {} };
 }
 
 function saveState(showToast = true) {
@@ -179,7 +181,91 @@ function day2Rows(week) {
   ];
 }
 
+function isGoalkeeperTrack() {
+  return state.playerPosition === "goalkeeper";
+}
+
+function goalkeeperConditioningRows(week) {
+  const presets = {
+    1: [
+      ["Tue", "Low-Impact Tempo", "15-18 min bike, pool, or elliptical at steady aerobic pace", "Record minutes and device used"],
+      ["Wed", "Recovery", "Mobility / stretch 15-20 min", "Check off only"],
+      ["Thu", "Bike Shuttle Intervals", "4 x 2 min moderate-hard, 90s easy spin", "Track completed reps and feel"],
+      ["Sat", "Low-Impact Aerobic", "20-25 min easy bike, swim, or brisk incline walk", "Record minutes or route"],
+      ["Sun", "Off", "Full rest", "Check off only"]
+    ],
+    2: [
+      ["Tue", "Low-Impact Tempo", "18-20 min bike, pool, or elliptical at steady aerobic pace", "Record minutes and device used"],
+      ["Wed", "Recovery", "Mobility / stretch 15-20 min", "Check off only"],
+      ["Thu", "Bike Shuttle Intervals", "5 x 2 min moderate-hard, 90s easy spin", "Track completed reps and feel"],
+      ["Sat", "Low-Impact Aerobic", "24-28 min easy bike, swim, or brisk incline walk", "Record minutes or route"],
+      ["Sun", "Off", "Full rest", "Check off only"]
+    ],
+    3: [
+      ["Tue", "Low-Impact Tempo", "20-22 min bike, pool, or elliptical at steady aerobic pace", "Record minutes and device used"],
+      ["Wed", "Recovery", "Mobility / stretch 15-20 min", "Check off only"],
+      ["Thu", "Bike Shuttle Intervals", "5 x 2.5 min moderate-hard, 90s easy spin", "Track completed reps and feel"],
+      ["Sat", "Low-Impact Aerobic", "25-30 min easy bike, swim, or brisk incline walk", "Record minutes or route"],
+      ["Sun", "Off", "Full rest", "Check off only"]
+    ],
+    4: [
+      ["Tue", "Bike Ladder", "3 min, 4 min, 5 min, 4 min, 3 min at moderate pace; easy spin = work", "Record total time and effort"],
+      ["Wed", "Recovery", "Mobility / stretch 15-20 min", "Check off only"],
+      ["Thu", "Tempo Spin Intervals", "2 blocks of 5 reps; 20s fast cadence / 40s easy; 3 min between blocks", "Track completed reps"],
+      ["Sat", "Low-Impact Fartlek", "20-22 min bike or elliptical with pace changes", "Record route or device"],
+      ["Sun", "Off", "Full rest", "Check off only"]
+    ],
+    5: [
+      ["Tue", "Bike Tempo Repeats", "4 x 3 min moderate-hard, 2 min easy", "Record completed reps and feel"],
+      ["Wed", "Recovery", "Mobility / stretch 15-20 min", "Check off only"],
+      ["Thu", "Tempo Spin Intervals", "2 blocks of 6 reps; 20s fast cadence / 40s easy; 3 min between blocks", "Track completed reps"],
+      ["Sat", "Low-Impact Aerobic", "24-30 min easy bike, swim, or brisk incline walk", "Record minutes or route"],
+      ["Sun", "Off", "Full rest", "Check off only"]
+    ],
+    6: [
+      ["Tue", "Bike Ladder", "3 min, 4 min, 5 min, 4 min, 3 min a little faster than Week 4; easy spin = work", "Record total time and effort"],
+      ["Wed", "Recovery", "Mobility / stretch 15-20 min", "Check off only"],
+      ["Thu", "Tempo Spin Intervals", "2 blocks of 6 reps; 20s fast cadence / 40s easy; keep it crisp, not sloppy", "Track completed reps"],
+      ["Sat", "Low-Impact Fartlek", "24-28 min bike or elliptical with pace changes", "Record route or device"],
+      ["Sun", "Off", "Full rest", "Check off only"]
+    ],
+    7: [
+      ["Tue", "Short Bike HIIT", "6 x 1 min high cadence, 75s easy", "Record completed reps and feel"],
+      ["Wed", "Recovery", "Mobility / stretch 15-20 min", "Check off only"],
+      ["Thu", "Goalkeeper Aerobic Flush", "4 x 90s moderate-hard, 90s easy; stop before legs get heavy", "Record completed reps"],
+      ["Sat", "Low-Impact Aerobic", "18-22 min easy bike, swim, or incline walk", "Record minutes or route"],
+      ["Sun", "Off", "Full rest", "Check off only"]
+    ],
+    8: [
+      ["Tue", "Short Bike HIIT", "7 x 1 min high cadence, 75s easy", "Record completed reps and feel"],
+      ["Wed", "Recovery", "Mobility / stretch 15-20 min", "Check off only"],
+      ["Thu", "Goalkeeper Aerobic Flush", "4 x 75-90s moderate-hard, 90s easy; stay fresh", "Record completed reps"],
+      ["Sat", "Low-Impact Aerobic", "18-20 min easy bike, swim, or incline walk", "Record minutes or route"],
+      ["Sun", "Off", "Full rest", "Check off only"]
+    ],
+    9: [
+      ["Tue", "Mini Aerobic Flush", "10-12 min easy bike or brisk incline walk", "Record how legs felt"],
+      ["Wed", "Off", "No training", "Check off only"],
+      ["Thu", "Flush Spin", "12 min easy spin + 3-4 short cadence pick-ups", "Record how legs felt"],
+      ["Sat", "Off", "Full rest", "Check off only"],
+      ["Sun", "Off", "Full rest; season starts Monday Aug 17", "Check off only"]
+    ]
+  };
+  return presets[week.week] || week.conditioning;
+}
+
+function conditioningRowsForWeek(week) {
+  return isGoalkeeperTrack() ? goalkeeperConditioningRows(week) : week.conditioning;
+}
+
 function getSessions(week) {
+  const conditioningRows = conditioningRowsForWeek(week);
+  const midweekSubtitle = isGoalkeeperTrack()
+    ? "Track lower-volume low-impact conditioning plus recovery work while keeping strength the same."
+    : "Track conditioning totals and whether recovery work got done cleanly.";
+  const lateweekSubtitle = isGoalkeeperTrack()
+    ? "Use low-impact aerobic work here so goalkeepers stay fresh while still building base fitness."
+    : "Use this for the shuttle, interval, and weekend run targets in the plan.";
   return [
     {
       id: "day1",
@@ -192,8 +278,8 @@ function getSessions(week) {
       id: "midweek",
       kicker: "Tuesday / Wednesday",
       title: "Midweek Conditioning + Recovery",
-      subtitle: "Track conditioning totals and whether recovery work got done cleanly.",
-      rows: week.conditioning.slice(0, 2).map(([day, name, prescribed, coachNote]) => ({
+      subtitle: midweekSubtitle,
+      rows: conditioningRows.slice(0, 2).map(([day, name, prescribed, coachNote]) => ({
         name: `${day} - ${name}`,
         prescribed,
         coachNote
@@ -210,8 +296,8 @@ function getSessions(week) {
       id: "lateweek",
       kicker: "Thursday / Weekend",
       title: "Late Week Conditioning",
-      subtitle: "Use this for the shuttle, interval, and weekend run targets in the plan.",
-      rows: week.conditioning.slice(2).map(([day, name, prescribed, coachNote]) => ({
+      subtitle: lateweekSubtitle,
+      rows: conditioningRows.slice(2).map(([day, name, prescribed, coachNote]) => ({
         name: `${day} - ${name}`,
         prescribed,
         coachNote
@@ -245,8 +331,10 @@ function renderWeekOptions() {
 
 function renderHeader(week) {
   weekTitleEl.textContent = `Week ${week.week}`;
-  weekMetaEl.innerHTML = `<span>${week.dates}</span><span>${week.phase}</span>`;
-  weekFocusEl.textContent = week.focus;
+  weekMetaEl.innerHTML = `<span>${week.dates}</span><span>${week.phase}</span><span>${isGoalkeeperTrack() ? "Goalkeeper Track" : "Field Player Track"}</span>`;
+  weekFocusEl.textContent = isGoalkeeperTrack()
+    ? `${week.focus} Goalkeepers keep the same strength plan but use lower-volume low-impact conditioning.`
+    : week.focus;
 }
 
 function renderSessions() {
@@ -355,7 +443,7 @@ function escapeAttr(value) {
 }
 
 function buildCsv() {
-  const header = ["Player Name", "Week", "Dates", "Phase", "Session", "Workout", "Prescribed", "Done", "Result", "Notes"];
+  const header = ["Player Name", "Position", "Week", "Dates", "Phase", "Session", "Workout", "Prescribed", "Done", "Result", "Notes"];
   const lines = [header];
 
   for (const week of weeks) {
@@ -364,6 +452,7 @@ function buildCsv() {
         const entry = getEntry(week.week, session.id, row.name);
         lines.push([
           state.playerName || "",
+          state.playerPosition || "field",
           `Week ${week.week}`,
           week.dates,
           week.phase,
@@ -418,6 +507,7 @@ function weeklySummaryForWeek(week) {
   return [
     `SPA Player Tracker`,
     `Player: ${state.playerName || "Unnamed player"}`,
+    `Position: ${state.playerPosition === "goalkeeper" ? "Goalkeeper" : "Field Player"}`,
     `Week ${week.week}: ${week.dates}`,
     `Goal: ${state.playerGoal || "n/a"}`,
     `Notes: ${state.playerNotes || "n/a"}`,
@@ -450,6 +540,7 @@ function buildWeekSubmission(week) {
     source: "spa-player-tracker",
     version: 2,
     playerName: (state.playerName || "").trim(),
+    playerPosition: state.playerPosition || "field",
     playerGoal: state.playerGoal || "",
     playerNotes: state.playerNotes || "",
     week: week.week,
@@ -544,6 +635,11 @@ function attachEvents() {
     saveState(false);
     render();
   });
+  playerPositionEl.addEventListener("change", () => {
+    state.playerPosition = playerPositionEl.value;
+    saveState(false);
+    render();
+  });
   document.getElementById("submitWeek").addEventListener("click", submitWeek);
   document.getElementById("downloadCsv").addEventListener("click", downloadCsv);
   document.getElementById("copySummary").addEventListener("click", copySummary);
@@ -572,6 +668,7 @@ function attachEvents() {
 
 function render() {
   playerNameEl.value = state.playerName || "";
+  playerPositionEl.value = state.playerPosition || "field";
   playerGoalEl.value = state.playerGoal || "";
   playerNotesEl.value = state.playerNotes || "";
   renderWeekOptions();

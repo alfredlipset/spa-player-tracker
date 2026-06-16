@@ -96,7 +96,7 @@
 
     .controls {
       display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
+      grid-template-columns: repeat(5, minmax(0, 1fr));
       gap: 14px;
       align-items: end;
     }
@@ -383,6 +383,13 @@
         <div class="field">
           <label for="weekSelect">Training Week</label>
           <select id="weekSelect"></select>
+        </div>
+        <div class="field">
+          <label for="playerPosition">Position Track</label>
+          <select id="playerPosition">
+            <option value="field">Field Player</option>
+            <option value="goalkeeper">Goalkeeper</option>
+          </select>
         </div>
         <div class="field">
           <label for="playerGoal">Weekly Goal</label>
