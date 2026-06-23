@@ -157,6 +157,11 @@
       border: 1px solid rgba(21, 71, 52, 0.25);
     }
 
+    button:disabled {
+      opacity: 0.68;
+      cursor: wait;
+    }
+
     .week-overview {
       display: grid;
       grid-template-columns: 1.6fr 1fr;
@@ -409,7 +414,7 @@
         <button id="resetWeek" class="ghost">Reset This Week</button>
       </div>
       <p id="submitStatus" class="footer-note" style="margin-top: 12px;">
-        Submit the selected week to the shared coach sheet after you update your results.
+        Submit the selected week to the shared coach sheet after you update your results. The app waits for Google confirmation before it marks a week as sent.
       </p>
 
       <div class="week-overview">
@@ -445,8 +450,9 @@
     <section id="sessions" class="sessions"></section>
 
     <p class="footer-note">
-      This tracker saves on the player’s device automatically. The main submit button sends the
-      selected week to the shared coach sheet. If that ever fails, use the backup form.
+      This tracker saves on the player’s device automatically. The main submit button waits for
+      Google to answer before it shows success and stores a receipt ID for each confirmed week.
+      If confirmation does not come back, the backup form opens prefilled with the current week.
     </p>
   </main>
 

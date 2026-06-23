@@ -111,9 +111,13 @@ const remainingCountEl = document.getElementById("remainingCount");
 const sessionCountEl = document.getElementById("sessionCount");
 const sessionsEl = document.getElementById("sessions");
 const submitStatusEl = document.getElementById("submitStatus");
+const submitWeekButtonEl = document.getElementById("submitWeek");
 const toastEl = document.getElementById("toast");
+const submitTimeoutMs = 15000;
 
 const state = loadState();
+let isSubmitting = false;
+let lastSubmissionPayload = null;
 
 function loadState() {
   try {
@@ -145,6 +149,103 @@ function flashToast(message) {
   toastEl.classList.add("show");
   clearTimeout(flashToast.timer);
   flashToast.timer = setTimeout(() => toastEl.classList.remove("show"), 1200);
+}
+
+function setSubmitButtonState(busy) {
+  isSubmitting = busy;
+  submitWeekButtonEl.disabled = busy;
+  submitWeekButtonEl.textContent = busy ? "Submitting..." : "Submit Week to Coach Sheet";
+}
+
+function createSubmissionReceipt(weekNum) {
+  const random = Math.random().toString(36).slice(2, 8).toUpperCase();
+  return `SPA-W${weekNum}-${random}`;
+}
+
+function selectedWeek() {
+  return weeks.find((item) => item.week === Number(state.selectedWeek)) || weeks[0];
+}
+
+function buildPrefilledFallbackFormUrl(payload = null) {
+  const params = new URLSearchParams();
+  const playerName = (state.playerName || "").trim();
+  if (playerName) {
+    params.set(playerNameEntry, playerName);
+  }
+  if (payload) {
+    params.set(submissionJsonEntry, JSON.stringify(payload));
+  }
+  const query = params.toString();
+  return query ? `${fallbackFormUrl}?usp=pp_url&${query}` : fallbackFormUrl;
+}
+
+async function createSubmitFrame() {
+  const iframe = document.createElement("iframe");
+  iframe.name = `submit-frame-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  iframe.hidden = true;
+  iframe.tabIndex = -1;
+  iframe.setAttribute("aria-hidden", "true");
+
+  const ready = new Promise((resolve, reject) => {
+    iframe.addEventListener("load", () => resolve(iframe), { once: true });
+    iframe.addEventListener("error", () => reject(new Error("Could not initialize submission frame")), { once: true });
+  });
+
+  document.body.appendChild(iframe);
+  iframe.src = "about:blank";
+  return ready;
+}
+
+async function submitWithHiddenForm(fields, timeoutMs = submitTimeoutMs) {
+  const iframe = await createSubmitFrame();
+
+  return new Promise((resolve, reject) => {
+    const form = document.createElement("form");
+    form.action = formResponseUrl;
+    form.method = "POST";
+    form.target = iframe.name;
+    form.acceptCharset = "UTF-8";
+    form.style.display = "none";
+
+    Object.entries(fields).forEach(([name, value]) => {
+      const input = document.createElement("input");
+      input.type = "hidden";
+      input.name = name;
+      input.value = value;
+      form.appendChild(input);
+    });
+
+    let settled = false;
+    const timeoutId = window.setTimeout(() => {
+      cleanup();
+      reject(new Error("Timed out waiting for Google confirmation"));
+    }, timeoutMs);
+
+    function cleanup() {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timeoutId);
+      iframe.removeEventListener("load", onLoad);
+      iframe.removeEventListener("error", onError);
+      form.remove();
+      iframe.remove();
+    }
+
+    function onLoad() {
+      cleanup();
+      resolve();
+    }
+
+    function onError() {
+      cleanup();
+      reject(new Error("Google form submission failed to load"));
+    }
+
+    iframe.addEventListener("load", onLoad);
+    iframe.addEventListener("error", onError);
+    document.body.appendChild(form);
+    form.submit();
+  });
 }
 
 function day1Rows(week) {
@@ -537,6 +638,7 @@ function buildWeekSubmission(week) {
   const completed = rows.filter((row) => row.done).length;
   return {
     submittedAt: new Date().toISOString(),
+    receiptId: createSubmissionReceipt(week.week),
     source: "spa-player-tracker",
     version: 2,
     playerName: (state.playerName || "").trim(),
@@ -558,45 +660,56 @@ function buildWeekSubmission(week) {
 function updateSubmitStatus() {
   const submission = state.submissions?.[String(state.selectedWeek)];
   if (submission?.submittedAt) {
-    const submittedAt = new Date(submission.submittedAt);
-    const label = Number.isNaN(submittedAt.getTime()) ? submission.submittedAt : submittedAt.toLocaleString();
-    submitStatusEl.textContent = `Last submitted Week ${state.selectedWeek}: ${label}`;
+    const timestamp = submission.confirmedAt || submission.submittedAt;
+    const submittedAt = new Date(timestamp);
+    const label = Number.isNaN(submittedAt.getTime()) ? timestamp : submittedAt.toLocaleString();
+    const receipt = submission.receiptId ? ` Receipt: ${submission.receiptId}.` : "";
+    submitStatusEl.textContent = `Confirmed Week ${state.selectedWeek}: ${label}.${receipt}`;
     return;
   }
-  submitStatusEl.textContent = "Submit the selected week to the shared coach sheet after you update your results.";
+  submitStatusEl.textContent = "Submit the selected week to the shared coach sheet after you update your results. The app now waits for Google confirmation before it marks a week as sent.";
 }
 
 async function submitWeek() {
-  const week = weeks.find((item) => item.week === Number(state.selectedWeek)) || weeks[0];
+  if (isSubmitting) return;
+
+  const week = selectedWeek();
   const playerName = (state.playerName || "").trim();
   if (!playerName) {
     flashToast("Enter player name first");
     playerNameEl.focus();
     return;
   }
+  if (!navigator.onLine) {
+    submitStatusEl.textContent = "You appear to be offline. Reconnect, then submit again or use the backup form.";
+    flashToast("Offline");
+    return;
+  }
 
   const payload = buildWeekSubmission(week);
-  const body = new URLSearchParams();
-  body.set(playerNameEntry, playerName);
-  body.set(submissionJsonEntry, JSON.stringify(payload));
+  const fields = {
+    [playerNameEntry]: playerName,
+    [submissionJsonEntry]: JSON.stringify(payload)
+  };
+  lastSubmissionPayload = payload;
 
   try {
-    submitStatusEl.textContent = `Submitting Week ${week.week}...`;
-    await fetch(formResponseUrl, {
-      method: "POST",
-      mode: "no-cors",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8"
-      },
-      body: body.toString()
-    });
-    state.submissions[String(week.week)] = { submittedAt: payload.submittedAt };
+    setSubmitButtonState(true);
+    submitStatusEl.textContent = `Submitting Week ${week.week} and waiting for Google confirmation...`;
+    await submitWithHiddenForm(fields);
+    state.submissions[String(week.week)] = {
+      submittedAt: payload.submittedAt,
+      confirmedAt: new Date().toISOString(),
+      receiptId: payload.receiptId
+    };
     saveState(false);
     updateSubmitStatus();
-    flashToast("Week submitted");
+    flashToast("Week confirmed");
   } catch (_) {
-    submitStatusEl.textContent = "Submit failed. Use the backup form button.";
-    flashToast("Submit failed");
+    submitStatusEl.textContent = `No confirmation came back for Week ${week.week}. Use the backup form button to resend this week with the same data.`;
+    flashToast("No confirmation");
+  } finally {
+    setSubmitButtonState(false);
   }
 }
 
@@ -644,7 +757,11 @@ function attachEvents() {
   document.getElementById("downloadCsv").addEventListener("click", downloadCsv);
   document.getElementById("copySummary").addEventListener("click", copySummary);
   document.getElementById("openFallbackForm").addEventListener("click", () => {
-    window.open(fallbackFormUrl, "_blank", "noopener,noreferrer");
+    const week = selectedWeek();
+    const payload = lastSubmissionPayload && lastSubmissionPayload.week === week.week
+      ? lastSubmissionPayload
+      : buildWeekSubmission(week);
+    window.open(buildPrefilledFallbackFormUrl(payload), "_blank", "noopener,noreferrer");
   });
   document.getElementById("resetWeek").addEventListener("click", resetWeek);
   sessionsEl.addEventListener("input", (event) => {
