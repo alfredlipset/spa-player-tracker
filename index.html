@@ -96,9 +96,13 @@
 
     .controls {
       display: grid;
-      grid-template-columns: repeat(5, minmax(0, 1fr));
+      grid-template-columns: repeat(4, minmax(0, 1fr));
       gap: 14px;
       align-items: end;
+    }
+
+    .field.span-2 {
+      grid-column: span 2;
     }
 
     .field label,
@@ -126,6 +130,13 @@
     .field textarea {
       min-height: 84px;
       resize: vertical;
+    }
+
+    .field small {
+      display: block;
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 0.84rem;
     }
 
     .actions {
@@ -334,6 +345,96 @@
       font-size: 0.93rem;
     }
 
+    .proof-panel {
+      margin-top: 16px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 16px;
+      background: linear-gradient(180deg, #fffdf8, #f5efe4);
+    }
+
+    .proof-panel[hidden] {
+      display: none;
+    }
+
+    .proof-uploader {
+      display: grid;
+      gap: 12px;
+      padding: 14px;
+      border: 1px dashed rgba(21, 71, 52, 0.28);
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.78);
+    }
+
+    .proof-uploader-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .upload-button {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 44px;
+      padding: 11px 16px;
+      border-radius: 999px;
+      background: var(--accent);
+      color: #f7f4ed;
+      font: 700 0.92rem/1 Arial, sans-serif;
+      cursor: pointer;
+      overflow: hidden;
+    }
+
+    .upload-button input {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+    }
+
+    .upload-status {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    .upload-status[data-tone="busy"] {
+      color: var(--accent);
+    }
+
+    .upload-status[data-tone="error"] {
+      color: #9b2c2c;
+    }
+
+    .upload-preview {
+      display: grid;
+      gap: 10px;
+      justify-items: start;
+    }
+
+    .upload-preview[hidden] {
+      display: none;
+    }
+
+    .upload-preview img {
+      width: min(240px, 100%);
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      box-shadow: var(--shadow);
+      background: #fff;
+      object-fit: cover;
+    }
+
+    .upload-preview-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+    }
+
     .toast {
       position: fixed;
       right: 14px;
@@ -359,6 +460,10 @@
       .week-overview,
       .stats-grid {
         grid-template-columns: 1fr;
+      }
+
+      .field.span-2 {
+        grid-column: auto;
       }
 
       .hero,
@@ -397,14 +502,60 @@
           </select>
         </div>
         <div class="field">
+          <label for="creditType">Workout Credit</label>
+          <select id="creditType">
+            <option value="program">Program Workout</option>
+            <option value="alt-strength">Alternative Strength Workout</option>
+            <option value="alt-conditioning">Alternative Conditioning Workout</option>
+            <option value="other">Other Workout for Review</option>
+          </select>
+        </div>
+        <div class="field span-2">
           <label for="playerGoal">Weekly Goal</label>
           <input id="playerGoal" type="text" placeholder="Example: hit all runs, stay crisp" />
         </div>
-        <div class="field">
+        <div class="field span-2">
           <label for="playerNotes">Coach / Player Notes</label>
           <input id="playerNotes" type="text" placeholder="Optional notes for this week" />
         </div>
       </div>
+
+      <section id="alternativeProofPanel" class="proof-panel" hidden>
+        <div class="controls">
+          <div class="field span-2">
+            <label for="alternativeWorkout">Alternative Workout Completed</label>
+            <textarea id="alternativeWorkout" placeholder="What did you do instead? Include exercises, intervals, sets, or key numbers."></textarea>
+            <small>Use this when the player did a different strength or conditioning session and wants credit for it.</small>
+          </div>
+          <div class="field span-2">
+            <label>Workout Proof Photo</label>
+            <div class="proof-uploader">
+              <div class="proof-uploader-actions">
+                <label class="upload-button" for="proofPhoto">
+                  Take or Upload Photo
+                  <input id="proofPhoto" type="file" accept="image/*" capture="environment" />
+                </label>
+                <button id="removeProofPhoto" type="button" class="ghost">Remove Photo</button>
+              </div>
+              <p id="proofPhotoStatus" class="upload-status">
+                Take a photo on your phone or upload one from your camera roll. If the direct uploader is unavailable, paste a share link below.
+              </p>
+              <div id="proofPhotoPreviewWrap" class="upload-preview" hidden>
+                <img id="proofPhotoPreview" alt="Workout proof preview" />
+                <div class="upload-preview-meta">
+                  <a id="proofPhotoLink" href="#" target="_blank" rel="noopener noreferrer">Open uploaded photo</a>
+                </div>
+              </div>
+            </div>
+            <small>The app can upload a phone photo directly once the coach upload endpoint is configured. A manual share link still works as backup.</small>
+          </div>
+          <div class="field span-2">
+            <label for="proofLink">Photo Link</label>
+            <input id="proofLink" type="url" placeholder="Auto-filled after upload, or paste an iCloud, Google Drive, or other share link" />
+            <small>This link is what coach receives in the weekly submission for review.</small>
+          </div>
+        </div>
+      </section>
 
       <div class="actions">
         <button id="submitWeek">Submit Week to Coach Sheet</button>
@@ -414,7 +565,7 @@
         <button id="resetWeek" class="ghost">Reset This Week</button>
       </div>
       <p id="submitStatus" class="footer-note" style="margin-top: 12px;">
-        Submit the selected week to the shared coach sheet after you update your results. The app waits for Google confirmation before it marks a week as sent.
+        Submit the selected week to the shared coach sheet after you update your results. Alternative workout credit can include a proof link for coach review.
       </p>
 
       <div class="week-overview">
@@ -453,10 +604,12 @@
       This tracker saves on the player’s device automatically. The main submit button waits for
       Google to answer before it shows success and stores a receipt ID for each confirmed week.
       If confirmation does not come back, the backup form opens prefilled with the current week.
+      For alternative workout credit, players can upload a proof photo directly from their phone when the upload endpoint is active, or paste a share link as backup.
     </p>
   </main>
 
   <div id="toast" class="toast">Saved</div>
+  <script src="./upload-config.js"></script>
   <script src="./app.js"></script>
 </body>
 </html>

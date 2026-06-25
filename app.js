@@ -94,13 +94,29 @@ const weeks = [
 const storageKey = "spa-player-tracker-v1";
 const fallbackFormUrl = "https://docs.google.com/forms/d/e/1FAIpQLSe4cWpH9Htqx0InTRLvjx8AGlShH8YoPYQ0O0TvAZK4nh_Qfw/viewform";
 const formResponseUrl = "https://docs.google.com/forms/d/e/1FAIpQLSe4cWpH9Htqx0InTRLvjx8AGlShH8YoPYQ0O0TvAZK4nh_Qfw/formResponse";
+const uploadConfig = window.SPA_UPLOAD_CONFIG || {};
+const uploadEndpointUrl = typeof uploadConfig.uploadUrl === "string" ? uploadConfig.uploadUrl.trim() : "";
+const uploadMessageSource = "spa-proof-upload";
+const uploadMaxBytes = 8 * 1024 * 1024;
+const uploadMaxDimension = 1600;
+const uploadJpegQualitySteps = [0.82, 0.72, 0.62, 0.52];
 const playerNameEntry = "entry.266055319";
 const submissionJsonEntry = "entry.781875227";
 const playerNameEl = document.getElementById("playerName");
 const weekSelectEl = document.getElementById("weekSelect");
 const playerPositionEl = document.getElementById("playerPosition");
+const creditTypeEl = document.getElementById("creditType");
 const playerGoalEl = document.getElementById("playerGoal");
 const playerNotesEl = document.getElementById("playerNotes");
+const alternativeProofPanelEl = document.getElementById("alternativeProofPanel");
+const alternativeWorkoutEl = document.getElementById("alternativeWorkout");
+const proofPhotoEl = document.getElementById("proofPhoto");
+const proofPhotoStatusEl = document.getElementById("proofPhotoStatus");
+const proofPhotoPreviewWrapEl = document.getElementById("proofPhotoPreviewWrap");
+const proofPhotoPreviewEl = document.getElementById("proofPhotoPreview");
+const proofPhotoLinkEl = document.getElementById("proofPhotoLink");
+const removeProofPhotoButtonEl = document.getElementById("removeProofPhoto");
+const proofLinkEl = document.getElementById("proofLink");
 const weekTitleEl = document.getElementById("weekTitle");
 const weekMetaEl = document.getElementById("weekMeta");
 const weekFocusEl = document.getElementById("weekFocus");
@@ -117,7 +133,9 @@ const submitTimeoutMs = 15000;
 
 const state = loadState();
 let isSubmitting = false;
+let isUploadingProof = false;
 let lastSubmissionPayload = null;
+let suppressProofLinkInputHandler = false;
 
 function loadState() {
   try {
@@ -127,8 +145,15 @@ function loadState() {
       return {
         playerName: "",
         playerPosition: "field",
+        creditType: "program",
         playerGoal: "",
         playerNotes: "",
+        alternativeWorkout: "",
+        proofLink: "",
+        proofPreviewUrl: "",
+        proofUploadName: "",
+        proofUploadedAt: "",
+        proofSource: "",
         selectedWeek: 1,
         entries: {},
         submissions: {},
@@ -136,7 +161,22 @@ function loadState() {
       };
     }
   } catch (_) {}
-  return { playerName: "", playerPosition: "field", playerGoal: "", playerNotes: "", selectedWeek: 1, entries: {}, submissions: {} };
+  return {
+    playerName: "",
+    playerPosition: "field",
+    creditType: "program",
+    playerGoal: "",
+    playerNotes: "",
+    alternativeWorkout: "",
+    proofLink: "",
+    proofPreviewUrl: "",
+    proofUploadName: "",
+    proofUploadedAt: "",
+    proofSource: "",
+    selectedWeek: 1,
+    entries: {},
+    submissions: {}
+  };
 }
 
 function saveState(showToast = true) {
@@ -153,8 +193,8 @@ function flashToast(message) {
 
 function setSubmitButtonState(busy) {
   isSubmitting = busy;
-  submitWeekButtonEl.disabled = busy;
-  submitWeekButtonEl.textContent = busy ? "Submitting..." : "Submit Week to Coach Sheet";
+  submitWeekButtonEl.disabled = busy || isUploadingProof;
+  submitWeekButtonEl.textContent = busy ? "Submitting..." : defaultSubmitButtonLabel();
 }
 
 function createSubmissionReceipt(weekNum) {
@@ -164,6 +204,96 @@ function createSubmissionReceipt(weekNum) {
 
 function selectedWeek() {
   return weeks.find((item) => item.week === Number(state.selectedWeek)) || weeks[0];
+}
+
+function nextWeekNumber(currentWeekNumber) {
+  const currentIndex = weeks.findIndex((item) => item.week === Number(currentWeekNumber));
+  if (currentIndex === -1) return null;
+  return weeks[currentIndex + 1]?.week ?? null;
+}
+
+function isAlternativeCredit() {
+  return (state.creditType || "program") !== "program";
+}
+
+function creditTypeLabel(value = state.creditType) {
+  switch (value) {
+    case "alt-strength":
+      return "Alternative Strength Workout";
+    case "alt-conditioning":
+      return "Alternative Conditioning Workout";
+    case "other":
+      return "Other Workout for Review";
+    default:
+      return "Program Workout";
+  }
+}
+
+function defaultSubmitButtonLabel() {
+  return isAlternativeCredit() ? "Submit Week for Coach Review" : "Submit Week to Coach Sheet";
+}
+
+function isUploadConfigured() {
+  return Boolean(uploadEndpointUrl);
+}
+
+function proofLinkRequirementText() {
+  return isUploadConfigured() ? "a photo upload or share link" : "a photo or screenshot share link";
+}
+
+function setProofLinkValue(value) {
+  state.proofLink = value;
+  suppressProofLinkInputHandler = true;
+  proofLinkEl.value = value;
+  suppressProofLinkInputHandler = false;
+}
+
+function clearUploadedProofMetadata() {
+  state.proofPreviewUrl = "";
+  state.proofUploadName = "";
+  state.proofUploadedAt = "";
+  state.proofSource = "";
+}
+
+function proofPhotoStatusMessage() {
+  if (isUploadingProof) {
+    return "Uploading photo...";
+  }
+  if (state.proofSource === "direct-upload" && state.proofLink) {
+    return "Photo uploaded. Coach will receive this image link with the weekly submission.";
+  }
+  if (state.proofLink) {
+    return "Manual proof link added. Coach will receive this link with the weekly submission.";
+  }
+  return isUploadConfigured()
+    ? "Take a photo on your phone or upload one from your camera roll. A manual share link still works as backup."
+    : "Direct photo upload is staged in the app but not connected yet. Paste a share link below until the coach upload endpoint is turned on.";
+}
+
+function updateProofPhotoUi(tone = "muted") {
+  proofPhotoStatusEl.dataset.tone = tone;
+  proofPhotoStatusEl.textContent = proofPhotoStatusMessage();
+  proofPhotoEl.disabled = isUploadingProof || !isAlternativeCredit();
+  removeProofPhotoButtonEl.disabled = isUploadingProof || !(state.proofLink || state.proofPreviewUrl);
+
+  if (state.proofPreviewUrl) {
+    proofPhotoPreviewWrapEl.hidden = false;
+    proofPhotoPreviewEl.src = state.proofPreviewUrl;
+    proofPhotoLinkEl.href = state.proofLink || state.proofPreviewUrl;
+    proofPhotoLinkEl.textContent = state.proofUploadName
+      ? `Open ${state.proofUploadName}`
+      : "Open uploaded photo";
+  } else {
+    proofPhotoPreviewWrapEl.hidden = true;
+    proofPhotoPreviewEl.removeAttribute("src");
+    proofPhotoLinkEl.href = "#";
+    proofPhotoLinkEl.textContent = "Open uploaded photo";
+  }
+}
+
+function updateAlternativeProofPanel() {
+  alternativeProofPanelEl.hidden = !isAlternativeCredit();
+  updateProofPhotoUi();
 }
 
 function buildPrefilledFallbackFormUrl(payload = null) {
@@ -179,9 +309,9 @@ function buildPrefilledFallbackFormUrl(payload = null) {
   return query ? `${fallbackFormUrl}?usp=pp_url&${query}` : fallbackFormUrl;
 }
 
-async function createSubmitFrame() {
+async function createHiddenFrame(prefix = "submit-frame") {
   const iframe = document.createElement("iframe");
-  iframe.name = `submit-frame-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  iframe.name = `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   iframe.hidden = true;
   iframe.tabIndex = -1;
   iframe.setAttribute("aria-hidden", "true");
@@ -197,7 +327,7 @@ async function createSubmitFrame() {
 }
 
 async function submitWithHiddenForm(fields, timeoutMs = submitTimeoutMs) {
-  const iframe = await createSubmitFrame();
+  const iframe = await createHiddenFrame("submit-frame");
 
   return new Promise((resolve, reject) => {
     const form = document.createElement("form");
@@ -242,6 +372,138 @@ async function submitWithHiddenForm(fields, timeoutMs = submitTimeoutMs) {
     }
 
     iframe.addEventListener("load", onLoad);
+    iframe.addEventListener("error", onError);
+    document.body.appendChild(form);
+    form.submit();
+  });
+}
+
+function createRequestId(prefix) {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function normalizeUploadOrigin() {
+  return window.location.origin && window.location.origin !== "null"
+    ? window.location.origin
+    : "*";
+}
+
+function base64ByteLength(base64Value) {
+  const padding = (base64Value.match(/=*$/) || [""])[0].length;
+  return Math.floor((base64Value.length * 3) / 4) - padding;
+}
+
+function sanitizeUploadFileName(fileName) {
+  const safe = (fileName || "spa-proof.jpg")
+    .replace(/[^a-z0-9._-]+/gi, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+  return safe || "spa-proof.jpg";
+}
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error("Could not read selected photo"));
+    reader.readAsDataURL(file);
+  });
+}
+
+function loadImageFromDataUrl(dataUrl) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("Could not open selected photo"));
+    image.src = dataUrl;
+  });
+}
+
+async function prepareProofImage(file) {
+  const sourceDataUrl = await readFileAsDataUrl(file);
+  const image = await loadImageFromDataUrl(sourceDataUrl);
+  const scale = Math.min(1, uploadMaxDimension / Math.max(image.width, image.height));
+  const width = Math.max(1, Math.round(image.width * scale));
+  const height = Math.max(1, Math.round(image.height * scale));
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+
+  const context = canvas.getContext("2d");
+  context.drawImage(image, 0, 0, width, height);
+
+  for (const quality of uploadJpegQualitySteps) {
+    const dataUrl = canvas.toDataURL("image/jpeg", quality);
+    const base64Data = dataUrl.split(",")[1] || "";
+    if (base64ByteLength(base64Data) <= uploadMaxBytes) {
+      const base = (file.name || "spa-proof").replace(/\.[^.]+$/, "");
+      return {
+        fileName: sanitizeUploadFileName(`${base || "spa-proof"}.jpg`),
+        mimeType: "image/jpeg",
+        base64Data,
+        previewUrl: dataUrl
+      };
+    }
+  }
+
+  throw new Error("Photo is still too large after compression. Use a smaller image or paste a share link instead.");
+}
+
+async function uploadProofPhotoWithHiddenForm(fields, timeoutMs = 45000) {
+  const iframe = await createHiddenFrame("upload-frame");
+  const requestId = fields.requestId;
+
+  return new Promise((resolve, reject) => {
+    const form = document.createElement("form");
+    form.action = uploadEndpointUrl;
+    form.method = "POST";
+    form.target = iframe.name;
+    form.acceptCharset = "UTF-8";
+    form.style.display = "none";
+
+    Object.entries(fields).forEach(([name, value]) => {
+      const input = document.createElement("input");
+      input.type = "hidden";
+      input.name = name;
+      input.value = value;
+      form.appendChild(input);
+    });
+
+    let settled = false;
+    const timeoutId = window.setTimeout(() => {
+      cleanup();
+      reject(new Error("Timed out while waiting for the photo upload to finish"));
+    }, timeoutMs);
+
+    function cleanup() {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timeoutId);
+      window.removeEventListener("message", onMessage);
+      iframe.removeEventListener("error", onError);
+      form.remove();
+      iframe.remove();
+    }
+
+    function onMessage(event) {
+      const payload = event.data;
+      if (!payload || payload.source !== uploadMessageSource || payload.requestId !== requestId) {
+        return;
+      }
+      cleanup();
+      if (payload.status === "ok") {
+        resolve(payload);
+        return;
+      }
+      reject(new Error(payload.message || "Photo upload failed"));
+    }
+
+    function onError() {
+      cleanup();
+      reject(new Error("Photo upload frame failed to load"));
+    }
+
+    window.addEventListener("message", onMessage);
     iframe.addEventListener("error", onError);
     document.body.appendChild(form);
     form.submit();
@@ -543,8 +805,101 @@ function escapeAttr(value) {
   return escapeHtml(value).replace(/'/g, "&#39;");
 }
 
+function clearProofPhoto(save = true) {
+  setProofLinkValue("");
+  clearUploadedProofMetadata();
+  proofPhotoEl.value = "";
+  if (save) {
+    saveState(false);
+  }
+  updateProofPhotoUi();
+  updateSubmitStatus();
+}
+
+async function uploadProofPhoto(file) {
+  if (isUploadingProof) return;
+  if (!file) return;
+  if (!file.type.startsWith("image/")) {
+    proofPhotoStatusEl.dataset.tone = "error";
+    proofPhotoStatusEl.textContent = "Select an image file to upload.";
+    flashToast("Choose an image");
+    return;
+  }
+  if (!isUploadConfigured()) {
+    proofPhotoStatusEl.dataset.tone = "error";
+    proofPhotoStatusEl.textContent = "Direct upload is not connected yet. Paste a share link below for now.";
+    flashToast("Upload not connected");
+    return;
+  }
+
+  let uploadErrorMessage = "";
+
+  try {
+    isUploadingProof = true;
+    updateProofPhotoUi("busy");
+    setSubmitButtonState(isSubmitting);
+    proofPhotoStatusEl.textContent = "Compressing photo...";
+
+    const preparedFile = await prepareProofImage(file);
+    proofPhotoPreviewWrapEl.hidden = false;
+    proofPhotoPreviewEl.src = preparedFile.previewUrl;
+    proofPhotoLinkEl.href = preparedFile.previewUrl;
+    proofPhotoLinkEl.textContent = "Preview selected photo";
+    proofPhotoStatusEl.textContent = "Uploading photo...";
+
+    const response = await uploadProofPhotoWithHiddenForm({
+      requestId: createRequestId("proof"),
+      origin: normalizeUploadOrigin(),
+      playerName: (state.playerName || "").trim(),
+      week: String(state.selectedWeek || 1),
+      creditType: state.creditType || "program",
+      fileName: preparedFile.fileName,
+      mimeType: preparedFile.mimeType,
+      base64Data: preparedFile.base64Data
+    });
+
+    state.proofPreviewUrl = response.previewUrl || preparedFile.previewUrl;
+    state.proofUploadName = response.fileName || preparedFile.fileName;
+    state.proofUploadedAt = new Date().toISOString();
+    state.proofSource = "direct-upload";
+    setProofLinkValue(response.imageUrl || "");
+    saveState(false);
+    updateProofPhotoUi();
+    updateSubmitStatus();
+    flashToast("Photo uploaded");
+  } catch (error) {
+    uploadErrorMessage = error.message || "Photo upload failed.";
+    flashToast("Upload failed");
+  } finally {
+    isUploadingProof = false;
+    proofPhotoEl.value = "";
+    updateProofPhotoUi(uploadErrorMessage ? "error" : "muted");
+    if (uploadErrorMessage) {
+      proofPhotoStatusEl.textContent = uploadErrorMessage;
+    }
+    setSubmitButtonState(isSubmitting);
+  }
+}
+
 function buildCsv() {
-  const header = ["Player Name", "Position", "Week", "Dates", "Phase", "Session", "Workout", "Prescribed", "Done", "Result", "Notes"];
+  const header = [
+    "Player Name",
+    "Position",
+    "Credit Type",
+    "Alternative Workout",
+    "Proof Link",
+    "Proof Source",
+    "Proof File",
+    "Week",
+    "Dates",
+    "Phase",
+    "Session",
+    "Workout",
+    "Prescribed",
+    "Done",
+    "Result",
+    "Notes"
+  ];
   const lines = [header];
 
   for (const week of weeks) {
@@ -554,6 +909,11 @@ function buildCsv() {
         lines.push([
           state.playerName || "",
           state.playerPosition || "field",
+          creditTypeLabel(),
+          state.alternativeWorkout || "",
+          state.proofLink || "",
+          state.proofSource || "",
+          state.proofUploadName || "",
           `Week ${week.week}`,
           week.dates,
           week.phase,
@@ -609,9 +969,13 @@ function weeklySummaryForWeek(week) {
     `SPA Player Tracker`,
     `Player: ${state.playerName || "Unnamed player"}`,
     `Position: ${state.playerPosition === "goalkeeper" ? "Goalkeeper" : "Field Player"}`,
+    `Credit: ${creditTypeLabel()}`,
     `Week ${week.week}: ${week.dates}`,
     `Goal: ${state.playerGoal || "n/a"}`,
     `Notes: ${state.playerNotes || "n/a"}`,
+    `Alternative Workout: ${state.alternativeWorkout || "n/a"}`,
+    `Proof Source: ${state.proofSource || "manual-link"}`,
+    `Proof Link: ${state.proofLink || "n/a"}`,
     ``,
     completedItems.length ? completedItems.join("\n") : "- No entries yet."
   ].join("\n");
@@ -640,11 +1004,20 @@ function buildWeekSubmission(week) {
     submittedAt: new Date().toISOString(),
     receiptId: createSubmissionReceipt(week.week),
     source: "spa-player-tracker",
-    version: 2,
+    version: 4,
     playerName: (state.playerName || "").trim(),
     playerPosition: state.playerPosition || "field",
+    creditType: state.creditType || "program",
+    creditTypeLabel: creditTypeLabel(),
     playerGoal: state.playerGoal || "",
     playerNotes: state.playerNotes || "",
+    alternativeWorkout: state.alternativeWorkout || "",
+    proofLink: state.proofLink || "",
+    proofPreviewUrl: state.proofPreviewUrl || "",
+    proofSource: state.proofSource || "",
+    proofUploadName: state.proofUploadName || "",
+    proofUploadedAt: state.proofUploadedAt || "",
+    requiresCoachReview: isAlternativeCredit(),
     week: week.week,
     dates: week.dates,
     phase: week.phase,
@@ -664,10 +1037,14 @@ function updateSubmitStatus() {
     const submittedAt = new Date(timestamp);
     const label = Number.isNaN(submittedAt.getTime()) ? timestamp : submittedAt.toLocaleString();
     const receipt = submission.receiptId ? ` Receipt: ${submission.receiptId}.` : "";
-    submitStatusEl.textContent = `Confirmed Week ${state.selectedWeek}: ${label}.${receipt}`;
+    submitStatusEl.textContent = submission.requiresCoachReview
+      ? `Submitted Week ${state.selectedWeek} for coach review: ${label}.${receipt}`
+      : `Confirmed Week ${state.selectedWeek}: ${label}.${receipt}`;
     return;
   }
-  submitStatusEl.textContent = "Submit the selected week to the shared coach sheet after you update your results. The app now waits for Google confirmation before it marks a week as sent.";
+  submitStatusEl.textContent = isAlternativeCredit()
+    ? `Submit the selected week for coach review after you add the alternative workout details and ${proofLinkRequirementText()}.`
+    : "Submit the selected week to the shared coach sheet after you update your results. The app now waits for Google confirmation before it marks a week as sent.";
 }
 
 async function submitWeek() {
@@ -680,10 +1057,33 @@ async function submitWeek() {
     playerNameEl.focus();
     return;
   }
+  if (isUploadingProof) {
+    submitStatusEl.textContent = "Wait for the proof photo upload to finish, then submit the week.";
+    flashToast("Upload in progress");
+    return;
+  }
   if (!navigator.onLine) {
     submitStatusEl.textContent = "You appear to be offline. Reconnect, then submit again or use the backup form.";
     flashToast("Offline");
     return;
+  }
+  if (isAlternativeCredit()) {
+    if (!(state.alternativeWorkout || "").trim()) {
+      submitStatusEl.textContent = "Alternative workout credit needs a short description of what was completed.";
+      flashToast("Describe alt workout");
+      alternativeWorkoutEl.focus();
+      return;
+    }
+    if (!(state.proofLink || "").trim()) {
+      submitStatusEl.textContent = `Alternative workout credit needs ${proofLinkRequirementText()} so coach can review it.`;
+      flashToast("Add proof");
+      if (isUploadConfigured()) {
+        proofPhotoEl.focus();
+      } else {
+        proofLinkEl.focus();
+      }
+      return;
+    }
   }
 
   const payload = buildWeekSubmission(week);
@@ -695,16 +1095,28 @@ async function submitWeek() {
 
   try {
     setSubmitButtonState(true);
-    submitStatusEl.textContent = `Submitting Week ${week.week} and waiting for Google confirmation...`;
+    submitStatusEl.textContent = isAlternativeCredit()
+      ? `Submitting Week ${week.week} for coach review and waiting for Google confirmation...`
+      : `Submitting Week ${week.week} and waiting for Google confirmation...`;
     await submitWithHiddenForm(fields);
     state.submissions[String(week.week)] = {
       submittedAt: payload.submittedAt,
       confirmedAt: new Date().toISOString(),
-      receiptId: payload.receiptId
+      receiptId: payload.receiptId,
+      requiresCoachReview: payload.requiresCoachReview
     };
+    const upcomingWeek = nextWeekNumber(week.week);
+    if (upcomingWeek) {
+      state.selectedWeek = upcomingWeek;
+    }
     saveState(false);
-    updateSubmitStatus();
-    flashToast("Week confirmed");
+    render();
+    if (upcomingWeek) {
+      submitStatusEl.textContent = isAlternativeCredit()
+        ? `Week ${week.week} was sent for coach review. You're now on Week ${upcomingWeek}.`
+        : `Week ${week.week} is confirmed. You're now on Week ${upcomingWeek}.`;
+    }
+    flashToast(isAlternativeCredit() ? "Sent for review" : "Week confirmed");
   } catch (_) {
     submitStatusEl.textContent = `No confirmation came back for Week ${week.week}. Use the backup form button to resend this week with the same data.`;
     flashToast("No confirmation");
@@ -735,6 +1147,13 @@ function attachEvents() {
     state.playerName = playerNameEl.value;
     saveState(false);
   });
+  creditTypeEl.addEventListener("change", () => {
+    state.creditType = creditTypeEl.value;
+    saveState(false);
+    updateAlternativeProofPanel();
+    setSubmitButtonState(false);
+    updateSubmitStatus();
+  });
   playerGoalEl.addEventListener("input", () => {
     state.playerGoal = playerGoalEl.value;
     saveState(false);
@@ -742,6 +1161,28 @@ function attachEvents() {
   playerNotesEl.addEventListener("input", () => {
     state.playerNotes = playerNotesEl.value;
     saveState(false);
+  });
+  alternativeWorkoutEl.addEventListener("input", () => {
+    state.alternativeWorkout = alternativeWorkoutEl.value;
+    saveState(false);
+  });
+  proofPhotoEl.addEventListener("change", () => {
+    const [file] = proofPhotoEl.files || [];
+    uploadProofPhoto(file);
+  });
+  removeProofPhotoButtonEl.addEventListener("click", () => {
+    clearProofPhoto();
+    flashToast("Photo removed");
+  });
+  proofLinkEl.addEventListener("input", () => {
+    state.proofLink = proofLinkEl.value;
+    if (!suppressProofLinkInputHandler) {
+      clearUploadedProofMetadata();
+      state.proofSource = state.proofLink.trim() ? "manual-link" : "";
+      updateProofPhotoUi();
+    }
+    saveState(false);
+    updateSubmitStatus();
   });
   weekSelectEl.addEventListener("change", () => {
     state.selectedWeek = Number(weekSelectEl.value);
@@ -786,14 +1227,19 @@ function attachEvents() {
 function render() {
   playerNameEl.value = state.playerName || "";
   playerPositionEl.value = state.playerPosition || "field";
+  creditTypeEl.value = state.creditType || "program";
   playerGoalEl.value = state.playerGoal || "";
   playerNotesEl.value = state.playerNotes || "";
+  alternativeWorkoutEl.value = state.alternativeWorkout || "";
+  setProofLinkValue(state.proofLink || "");
+  updateAlternativeProofPanel();
   renderWeekOptions();
   const week = weeks.find((item) => item.week === Number(state.selectedWeek)) || weeks[0];
   renderHeader(week);
   renderSessions();
   updateStats();
   updateSubmitStatus();
+  setSubmitButtonState(false);
 }
 
 render();
