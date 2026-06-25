@@ -685,6 +685,14 @@ function setEntry(weekNum, sessionId, rowName, patch) {
   updateStats();
 }
 
+function clearWeekEntries(weekNum) {
+  Object.keys(state.entries).forEach((key) => {
+    if (key.startsWith(`${weekNum}__`)) {
+      delete state.entries[key];
+    }
+  });
+}
+
 function renderWeekOptions() {
   weekSelectEl.innerHTML = weeks
     .map((week) => `<option value="${week.week}">Week ${week.week} - ${week.dates}</option>`)
@@ -1105,6 +1113,7 @@ async function submitWeek() {
       receiptId: payload.receiptId,
       requiresCoachReview: payload.requiresCoachReview
     };
+    clearWeekEntries(week.week);
     const upcomingWeek = nextWeekNumber(week.week);
     if (upcomingWeek) {
       state.selectedWeek = upcomingWeek;
@@ -1132,11 +1141,7 @@ async function copySummary() {
 
 function resetWeek() {
   const weekNum = Number(state.selectedWeek);
-  Object.keys(state.entries).forEach((key) => {
-    if (key.startsWith(`${weekNum}__`)) {
-      delete state.entries[key];
-    }
-  });
+  clearWeekEntries(weekNum);
   saveState(false);
   render();
   flashToast("Week reset");
