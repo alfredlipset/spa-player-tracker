@@ -106,6 +106,7 @@ const playerNameEl = document.getElementById("playerName");
 const weekSelectEl = document.getElementById("weekSelect");
 const playerPositionEl = document.getElementById("playerPosition");
 const creditTypeEl = document.getElementById("creditType");
+const creditTypeHintEl = document.getElementById("creditTypeHint");
 const playerGoalEl = document.getElementById("playerGoal");
 const playerNotesEl = document.getElementById("playerNotes");
 const alternativeProofPanelEl = document.getElementById("alternativeProofPanel");
@@ -116,6 +117,7 @@ const proofPhotoPreviewWrapEl = document.getElementById("proofPhotoPreviewWrap")
 const proofPhotoPreviewEl = document.getElementById("proofPhotoPreview");
 const proofPhotoLinkEl = document.getElementById("proofPhotoLink");
 const removeProofPhotoButtonEl = document.getElementById("removeProofPhoto");
+const proofDisabledNoteEl = document.getElementById("proofDisabledNote");
 const proofLinkEl = document.getElementById("proofLink");
 const weekTitleEl = document.getElementById("weekTitle");
 const weekMetaEl = document.getElementById("weekMeta");
@@ -256,6 +258,9 @@ function clearUploadedProofMetadata() {
 }
 
 function proofPhotoStatusMessage() {
+  if (!isAlternativeCredit()) {
+    return "Photo proof is only used for alternative workout credit. Switch Workout Credit above to enable it.";
+  }
   if (isUploadingProof) {
     return "Uploading photo...";
   }
@@ -271,10 +276,16 @@ function proofPhotoStatusMessage() {
 }
 
 function updateProofPhotoUi(tone = "muted") {
+  const alternativeCredit = isAlternativeCredit();
   proofPhotoStatusEl.dataset.tone = tone;
   proofPhotoStatusEl.textContent = proofPhotoStatusMessage();
-  proofPhotoEl.disabled = isUploadingProof || !isAlternativeCredit();
-  removeProofPhotoButtonEl.disabled = isUploadingProof || !(state.proofLink || state.proofPreviewUrl);
+  proofPhotoEl.disabled = isUploadingProof || !alternativeCredit;
+  removeProofPhotoButtonEl.disabled = isUploadingProof || !alternativeCredit || !(state.proofLink || state.proofPreviewUrl);
+
+  const proofUploaderEl = alternativeProofPanelEl.querySelector(".proof-uploader");
+  if (proofUploaderEl) {
+    proofUploaderEl.classList.toggle("is-disabled", !alternativeCredit);
+  }
 
   if (state.proofPreviewUrl) {
     proofPhotoPreviewWrapEl.hidden = false;
@@ -292,7 +303,14 @@ function updateProofPhotoUi(tone = "muted") {
 }
 
 function updateAlternativeProofPanel() {
-  alternativeProofPanelEl.hidden = !isAlternativeCredit();
+  const alternativeCredit = isAlternativeCredit();
+  alternativeProofPanelEl.dataset.active = alternativeCredit ? "true" : "false";
+  alternativeWorkoutEl.disabled = !alternativeCredit;
+  proofLinkEl.disabled = !alternativeCredit;
+  proofDisabledNoteEl.hidden = alternativeCredit;
+  creditTypeHintEl.textContent = alternativeCredit
+    ? "Alternative workout selected. Add a short description and either upload a photo or paste a share link for coach review."
+    : "Switch this away from Program Workout to open the proof photo section for an alternative workout submission.";
   updateProofPhotoUi();
 }
 
@@ -632,6 +650,7 @@ function getSessions(week) {
   return [
     {
       id: "day1",
+      collapsedByDefault: true,
       kicker: "Monday",
       title: "Day 1 Strength + Acceleration",
       subtitle: "Record load, reps, effort, and any form notes after the first main lift day.",
@@ -639,6 +658,7 @@ function getSessions(week) {
     },
     {
       id: "midweek",
+      collapsedByDefault: false,
       kicker: "Tuesday / Wednesday",
       title: "Midweek Conditioning + Recovery",
       subtitle: midweekSubtitle,
@@ -650,6 +670,7 @@ function getSessions(week) {
     },
     {
       id: "day2",
+      collapsedByDefault: true,
       kicker: "Friday",
       title: "Day 2 Strength + Agility",
       subtitle: "Enter results from the second main lift day and any sharpness or fatigue notes.",
@@ -657,6 +678,7 @@ function getSessions(week) {
     },
     {
       id: "lateweek",
+      collapsedByDefault: false,
       kicker: "Thursday / Weekend",
       title: "Late Week Conditioning",
       subtitle: lateweekSubtitle,
@@ -713,74 +735,94 @@ function renderSessions() {
   const sessions = getSessions(week);
   sessionsEl.innerHTML = sessions
     .map((session) => `
-      <article class="session-card">
-        <div class="session-head">
-          <div class="session-kicker">${session.kicker}</div>
-          <h3>${session.title}</h3>
-          <p>${session.subtitle}</p>
-        </div>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th class="done-cell">Done</th>
-                <th>Workout</th>
-                <th>Prescribed</th>
-                <th>Result</th>
-                <th>Notes</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${session.rows.map((row) => {
-                const entry = getEntry(week.week, session.id, row.name);
-                return `
-                  <tr>
-                    <td class="done-cell">
-                      <input
-                        type="checkbox"
-                        data-role="done"
-                        data-week="${week.week}"
-                        data-session="${session.id}"
-                        data-row="${escapeAttr(row.name)}"
-                        ${entry.done ? "checked" : ""}
-                      />
-                    </td>
-                    <td class="title-cell">
-                      <strong>${escapeHtml(row.name)}</strong>
-                      ${row.coachNote ? `<span>${escapeHtml(row.coachNote)}</span>` : ""}
-                    </td>
-                    <td>${escapeHtml(row.prescribed)}</td>
-                    <td>
-                      <input
-                        class="small-input"
-                        type="text"
-                        placeholder="Time, load, reps, distance"
-                        value="${escapeAttr(entry.result)}"
-                        data-role="result"
-                        data-week="${week.week}"
-                        data-session="${session.id}"
-                        data-row="${escapeAttr(row.name)}"
-                      />
-                    </td>
-                    <td>
-                      <textarea
-                        class="small-textarea"
-                        placeholder="${escapeAttr(row.noteHint || "How did it feel?")}"
-                        data-role="notes"
-                        data-week="${week.week}"
-                        data-session="${session.id}"
-                        data-row="${escapeAttr(row.name)}"
-                      >${escapeHtml(entry.notes)}</textarea>
-                    </td>
-                  </tr>
-                `;
-              }).join("")}
-            </tbody>
-          </table>
-        </div>
+      <article class="session-card" data-collapsed="${session.collapsedByDefault ? "true" : "false"}">
+        <details class="session-toggle" data-session-details ${session.collapsedByDefault ? "" : "open"}>
+          <summary class="session-head">
+            <div class="session-kicker">${session.kicker}</div>
+            <h3>${session.title}</h3>
+            <p>${session.subtitle}</p>
+            <div class="session-summary-meta">
+              <span class="session-chip">${session.rows.length} items</span>
+              <span class="session-chip">${session.collapsedByDefault ? "Strength details collapsed by default" : "Expanded by default"}</span>
+              <span class="session-chip toggle-chip">Expand / Collapse</span>
+            </div>
+          </summary>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th class="done-cell">Done</th>
+                  <th>Workout</th>
+                  <th>Prescribed</th>
+                  <th>Result</th>
+                  <th>Notes</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${session.rows.map((row) => {
+                  const entry = getEntry(week.week, session.id, row.name);
+                  return `
+                    <tr>
+                      <td class="done-cell">
+                        <input
+                          type="checkbox"
+                          data-role="done"
+                          data-week="${week.week}"
+                          data-session="${session.id}"
+                          data-row="${escapeAttr(row.name)}"
+                          ${entry.done ? "checked" : ""}
+                        />
+                      </td>
+                      <td class="title-cell">
+                        <strong>${escapeHtml(row.name)}</strong>
+                        ${row.coachNote ? `<span>${escapeHtml(row.coachNote)}</span>` : ""}
+                      </td>
+                      <td>${escapeHtml(row.prescribed)}</td>
+                      <td>
+                        <input
+                          class="small-input"
+                          type="text"
+                          placeholder="Time, load, reps, distance"
+                          value="${escapeAttr(entry.result)}"
+                          data-role="result"
+                          data-week="${week.week}"
+                          data-session="${session.id}"
+                          data-row="${escapeAttr(row.name)}"
+                        />
+                      </td>
+                      <td>
+                        <textarea
+                          class="small-textarea"
+                          placeholder="${escapeAttr(row.noteHint || "How did it feel?")}"
+                          data-role="notes"
+                          data-week="${week.week}"
+                          data-session="${session.id}"
+                          data-row="${escapeAttr(row.name)}"
+                        >${escapeHtml(entry.notes)}</textarea>
+                      </td>
+                    </tr>
+                  `;
+                }).join("")}
+              </tbody>
+            </table>
+          </div>
+        </details>
       </article>
     `)
     .join("");
+
+  sessionsEl.querySelectorAll("details[data-session-details]").forEach((detailsEl) => {
+    const syncCollapsedState = () => {
+      const cardEl = detailsEl.closest(".session-card");
+      if (cardEl) {
+        cardEl.dataset.collapsed = detailsEl.open ? "false" : "true";
+      }
+    };
+
+    syncCollapsedState();
+    detailsEl.addEventListener("toggle", syncCollapsedState);
+  });
+
   sessionCountEl.textContent = String(sessions.length);
 }
 

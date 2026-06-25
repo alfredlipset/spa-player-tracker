@@ -139,6 +139,13 @@
       font-size: 0.84rem;
     }
 
+    .field-help {
+      display: block;
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 0.84rem;
+    }
+
     .actions {
       display: flex;
       flex-wrap: wrap;
@@ -353,8 +360,8 @@
       background: linear-gradient(180deg, #fffdf8, #f5efe4);
     }
 
-    .proof-panel[hidden] {
-      display: none;
+    .proof-panel[data-active="false"] {
+      opacity: 0.9;
     }
 
     .proof-uploader {
@@ -364,6 +371,16 @@
       border: 1px dashed rgba(21, 71, 52, 0.28);
       border-radius: 14px;
       background: rgba(255, 255, 255, 0.78);
+    }
+
+    .proof-uploader.is-disabled {
+      opacity: 0.72;
+    }
+
+    .proof-disabled-note {
+      margin: 0 0 12px;
+      color: var(--muted);
+      font-size: 0.9rem;
     }
 
     .proof-uploader-actions {
@@ -433,6 +450,59 @@
       flex-wrap: wrap;
       gap: 10px;
       align-items: center;
+    }
+
+    .session-toggle {
+      display: block;
+    }
+
+    .session-toggle summary {
+      list-style: none;
+      cursor: pointer;
+    }
+
+    .session-toggle summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .session-head {
+      list-style: none;
+    }
+
+    .session-summary-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .session-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      min-height: 30px;
+      padding: 6px 10px;
+      border: 1px solid rgba(21, 71, 52, 0.12);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.72);
+      color: var(--muted);
+      font: 700 0.74rem/1 Arial, sans-serif;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .session-chip.toggle-chip {
+      margin-left: auto;
+      color: var(--accent);
+      border-color: rgba(21, 71, 52, 0.22);
+    }
+
+    .session-card[data-collapsed="true"] .session-chip.toggle-chip::before {
+      content: "+";
+    }
+
+    .session-card[data-collapsed="false"] .session-chip.toggle-chip::before {
+      content: "\2212";
     }
 
     .toast {
@@ -509,6 +579,7 @@
             <option value="alt-conditioning">Alternative Conditioning Workout</option>
             <option value="other">Other Workout for Review</option>
           </select>
+          <small id="creditTypeHint" class="field-help">Switch this away from Program Workout to open the proof photo section for an alternative workout submission.</small>
         </div>
         <div class="field span-2">
           <label for="playerGoal">Weekly Goal</label>
@@ -520,7 +591,7 @@
         </div>
       </div>
 
-      <section id="alternativeProofPanel" class="proof-panel" hidden>
+      <section id="alternativeProofPanel" class="proof-panel" data-active="false">
         <div class="controls">
           <div class="field span-2">
             <label for="alternativeWorkout">Alternative Workout Completed</label>
@@ -529,6 +600,7 @@
           </div>
           <div class="field span-2">
             <label>Workout Proof Photo</label>
+            <p id="proofDisabledNote" class="proof-disabled-note">Choose an alternative workout credit above to enable photo proof for coach review.</p>
             <div class="proof-uploader">
               <div class="proof-uploader-actions">
                 <label class="upload-button" for="proofPhoto">
